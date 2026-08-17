@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 Gümrük Müşavirliği Ücret Hesaplama</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#1e2329;color:#f2f2f2;font-family:Arial,sans-serif}
+.container{max-width:1200px;margin:auto;padding:12px}
+.header{background:#11161c;text-align:center;padding:16px 10px;border-radius:10px 10px 0 0}
+.header h1{margin:0;font-size:22px}.header p{margin:5px 0 0;color:#b8c0ca;font-size:12px}
+.panel{background:#252b33;border:1px solid #3a414a;border-radius:8px;padding:10px;margin-top:8px}
+h2{font-size:14px;color:#2196f3;margin:2px 0 8px}
+input,select,button{font:inherit}
+input,select{background:#fff;color:#111;border:1px solid #aaa;border-radius:4px;padding:7px;width:100%}
+button{border:0;border-radius:5px;padding:9px 13px;color:#fff;font-weight:bold;cursor:pointer}
+.blue{background:#1976d2}.green{background:#168a4a}.red{background:#c62828}
+.kurbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kurbar label{font-weight:bold}
+.kur{width:130px!important}
+.note{color:#b8c0ca;font-size:11px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th{background:#11161c;padding:7px;font-size:11px}
+td{padding:3px;background:#292f37;border-bottom:1px solid #3b424b}
+tr:nth-child(even) td{background:#242a31}
+td input,td select{padding:6px;font-size:12px}
+.no{text-align:center;color:#b8c0ca;width:35px}
+.money{text-align:right;white-space:nowrap;font-size:12px}
+.greenText{color:#20a85a;font-weight:bold}
+.warn{color:#e0a800;font-weight:bold}
+.buttons{text-align:center;padding:8px}
+.buttons button{margin:3px 5px;min-width:150px}
+.results{background:#252b33;border:2px solid #3a414a;border-radius:8px;padding:10px;margin-top:8px}
+.resultrow{display:flex;justify-content:space-between;padding:5px 10px;font-weight:bold}
+.total{background:#168a4a;border-radius:6px;font-size:18px;padding:12px;margin-top:6px}
+@media(max-width:600px){
+ .container{padding:5px}.header h1{font-size:17px}
+ .panel{padding:7px}.note{font-size:10px}
+ .buttons button{width:100%;margin:3px 0}
+ .resultrow{font-size:13px}.total{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<h1>2026 GÜMRÜK MÜŞAVİRLİĞİ ÜCRET HESAPLAMA</h1>
+<p>İthalat • İhracat • Transit • Antrepo • Özellik Arz Eden İşlemler</p>
+</div>
+
+<div class="panel">
+<h2>USD KURU</h2>
+<div class="kurbar">
+<label>USD/TL:</label>
+<input id="globalRate" class="kur" inputmode="decimal" placeholder="Örn. 41,2500">
+<button class="blue" onclick="getTCMB()">TCMB GÜNCEL KURU GETİR</button>
+<span class="note">İTH-13 satırlarına otomatik kur aktarılır. Geçmiş kur için manuel giriş yapabilirsiniz.</span>
+</div>
+</div>
+
+<div class="panel">
+<h2>HİZMET GİRİŞLERİ</h2>
+<div class="tablewrap">
+<table>
+<thead><tr>
+<th>NO</th><th>HİZMET KODU</th><th>ADET</th><th>CIF USD</th><th>USD/TL</th><th>BİRİM ÜCRET</th><th>SATIR TOPLAMI</th>
+</tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+<div class="buttons">
+<button class="green" onclick="calculate()">HESAPLA</button>
+<button class="red" onclick="clearAll()">TÜMÜNÜ TEMİZLE</button>
+</div>
+</div>
+
+<div class="results">
+<h2>HESAPLAMA SONUÇLARI</h2>
+<div class="resultrow"><span>KDV HARİÇ TOPLAM:</span><span id="subtotal">0,00 TL</span></div>
+<div class="resultrow"><span>%20 KDV:</span><span id="vat" class="warn">0,00 TL</span></div>
+<div class="total resultrow"><span>KDV DAHİL GENEL TOPLAM</span><span id="grand">0,00 TL</span></div>
+</div>
+</div>
+
+<script>
+const T={
+"İHR-1(HAVA-KARA)":2050,"İHR-1 (DENİZ)":2670,"İHR-2":4100,"İHR-3":4100,"İHR-4":2740,
+"İHR-5":5470,"İHR-6":2740,"İHR-7":8260,"İHR-8":690,"İHR-9":50,
+"İTH-1 HAVA":3320,"İTH-1 KARA":3390,"İTH-2":4670,"İTH-3":2160,"İTH-4":12900,
+"İTH-5":10140,"İTH-6":5470,"İTH-7":3900,"İTH-8":4670,"İTH-9":8140,
+"İTH-10":0,"İTH-11":2090,"İTH-12":3410,"İTH-13":0,"İTH-14":1350,"İTH-15":70,
+"TR-1":3670,"TR-2":940,"ANT-1":1350,"ANT-2":3670,"ANT-3":1000,
+"SB-1":1350,"ÖZ-1":900,"ÖZ-2":2160,"ÖZ-3":1590,"ÖZ-4":940,"ÖZ-5":350
+};
+const CODES=Object.keys(T);
+
+function num(v){
+ if(v==null||String(v).trim()==="") return 0;
+ let s=String(v).trim();
+ if(s.includes(",")&&s.includes(".")){
+   if(s.lastIndexOf(",")>s.lastIndexOf(".")){s=s.replace(/\./g,"").replace(",",".")}
+   else{s=s.replace(/,/g,"")}
+ }else if(s.includes(",")){s=s.replace(",",".")}
+ let n=parseFloat(s); return isNaN(n)?0:n;
+}
+function money(n){
+ return new Intl.NumberFormat("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+" TL";
+}
+function opts(){
+ return '<option value="">-- Hizmet kodu seçin --</option>'+
+ CODES.map(x=>`<option value="${x}">${x}</option>`).join("");
+}
+function makeRows(){
+ let html="";
+ for(let i=0;i<15;i++){
+  html+=`<tr>
+  <td class="no">${i+1}</td>
+  <td><select id="code${i}" onchange="codeChanged(${i})">${opts()}</select></td>
+  <td><input id="qty${i}" value="1" inputmode="numeric" oninput="calculate()"></td>
+  <td><input id="cif${i}" inputmode="decimal" oninput="calculate()" placeholder="İTH-13 / İTH-10"></td>
+  <td><input id="rate${i}" inputmode="decimal" oninput="calculate()"></td>
+  <td id="unit${i}" class="money"></td>
+  <td id="line${i}" class="money greenText"></td>
+  </tr>`;
+ }
+ document.getElementById("rows").innerHTML=html;
+}
+function codeChanged(i){
+ let code=document.getElementById("code"+i).value;
+ if(code==="İTH-13"){
+   let r=document.getElementById("globalRate").value;
+   if(r){document.getElementById("rate"+i).value=r}
+ }
+ calculate();
+}
+function ith10(cif){
+ if(cif<=500000)return 8140;
+ if(cif<=1000000)return 10740;
+ if(cif<=1500000)return 13340;
+ return 15940;
+}
+function ith13(cif,rate){
+ if(cif<=15000)return 0;
+ let remaining=cif-15000, usd=0;
+ let b=Math.min(remaining,210000); usd+=b*0.003; remaining-=b;
+ if(remaining>0){let c=Math.min(remaining,1775000);usd+=c*0.001;remaining-=c}
+ if(remaining>0){let d=Math.min(remaining,8000000);usd+=d*0.0001;remaining-=d}
+ if(cif>10000000) usd=cif*0.00003;
+ return usd*rate;
+}
+function calculate(){
+ let total=0;
+ for(let i=0;i<15;i++){
+   let code=document.getElementById("code"+i).value;
+   let qty=num(document.getElementById("qty"+i).value); if(qty<=0)qty=1;
+   let cif=num(document.getElementById("cif"+i).value);
+   let rate=num(document.getElementById("rate"+i).value);
+   let unit=0,line=0,msg="";
+   if(!code){document.getElementById("unit"+i).textContent="";document.getElementById("line"+i).textContent="";continue}
+   if(code==="İTH-13"){
+      if(cif<=0){msg="CIF GİRİNİZ";document.getElementById("unit"+i).className="money warn"}
+      else if(rate<=0){msg="KUR GİRİNİZ";document.getElementById("unit"+i).className="money warn"}
+      else {unit=ith13(cif,rate);line=unit*qty;document.getElementById("unit"+i).className="money greenText"}
+   }else if(code==="İTH-10"){
+      if(cif<=0){msg="CIF GİRİNİZ";document.getElementById("unit"+i).className="money warn"}
+      else {unit=ith10(cif);line=unit*qty;document.getElementById("unit"+i).className="money"}
+   }else{
+      unit=T[code];line=unit*qty;document.getElementById("unit"+i).className="money";
+   }
+   document.getElementById("unit"+i).textContent=msg||money(unit);
+   document.getElementById("line"+i).textContent=line?money(line):"";
+   total+=line;
+ }
+ document.getElementById("subtotal").textContent=money(total);
+ let vat=total*0.20;
+ document.getElementById("vat").textContent=money(vat);
+ document.getElementById("grand").textContent=money(total+vat);
+}
+function clearAll(){
+ for(let i=0;i<15;i++){
+   document.getElementById("code"+i).value="";
+   document.getElementById("qty"+i).value="1";
+   document.getElementById("cif"+i).value="";
+   document.getElementById("rate"+i).value="";
+   document.getElementById("unit"+i).textContent="";
+   document.getElementById("line"+i).textContent="";
+ }
+ document.getElementById("globalRate").value="";
+ calculate();
+}
+async function getTCMB(){
+ const btn=event.currentTarget;
+ btn.disabled=true; btn.textContent="KUR ALINIYOR...";
+ try{
+   /*
+    TCMB'nin doğrudan XML adresi bazı tarayıcılarda CORS nedeniyle
+    engellenebilir. Önce doğrudan TCMB denenir.
+   */
+   const response=await fetch("https://www.tcmb.gov.tr/kurlar/today.xml",{cache:"no-store"});
+   if(!response.ok)throw new Error("TCMB yanıt vermedi.");
+   const text=await response.text();
+   const doc=new DOMParser().parseFromString(text,"text/xml");
+   const currencies=[...doc.getElementsByTagName("Currency")];
+   const usd=currencies.find(x=>x.getAttribute("CurrencyCode")==="USD");
+   if(!usd)throw new Error("USD bulunamadı.");
+   const buying=usd.getElementsByTagName("ForexBuying")[0].textContent.replace(",",".");
+   document.getElementById("globalRate").value=buying;
+   for(let i=0;i<15;i++){
+     if(document.getElementById("code"+i).value==="İTH-13")
+       document.getElementById("rate"+i).value=buying;
+   }
+   calculate();
+ }catch(e){
+   alert("TCMB kuru tarayıcı tarafından alınamadı.\n\nBu durumda USD/TL alanına kuru manuel yazabilirsiniz.\n\nHata: "+e.message);
+ }finally{
+   btn.disabled=false;btn.textContent="TCMB GÜNCEL KURU GETİR";
+ }
+}
+document.getElementById("globalRate").addEventListener("input",function(){
+ for(let i=0;i<15;i++){
+   if(document.getElementById("code"+i).value==="İTH-13")
+     document.getElementById("rate"+i).value=this.value;
+ }
+ calculate();
+});
+makeRows();
+</script>
+</body>
+</html>
